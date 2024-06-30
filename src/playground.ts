@@ -53,10 +53,6 @@ const NUM_SAMPLES_CLASSIFY = 500;
 const NUM_SAMPLES_REGRESS = 1200;
 const DENSITY = 100;
 
-enum HoverType {
-  BIAS, WEIGHT
-}
-
 interface InputFeature {
   f: (x: number, y: number) => number;
   label?: string;
@@ -166,6 +162,7 @@ let colorScale = d3.scale.linear<string, number>()
                      .range(["#f59322", "#e8eaeb", "#0877bd"])
                      .clamp(true);
 let iter = 0;
+let dataIter = 0;
 let trainData: Example2D[] = [];
 let testData: Example2D[] = [];
 let network: nn.Node[][] = null;
@@ -199,6 +196,15 @@ function makeGUI() {
       simulationStarted();
     }
     oneStep();
+  });
+
+  d3.select("#next-batch-button").on("click", () => {
+    player.pause();
+    userHasInteracted();
+    if (iter === 0) {
+      simulationStarted();
+    }
+    batchStep();
   });
 
   d3.select("#data-regen-button").on("click", () => {
@@ -485,9 +491,9 @@ function drawNode(cx: number, cy: number, nodeId: string, isInput: boolean,
         width: BIAS_SIZE,
         height: BIAS_SIZE,
       }).on("mouseenter", function() {
-        updateHoverCard(HoverType.BIAS, node, d3.mouse(container.node()));
+        showNodeHoverCard(node, d3.mouse(container.node()));
       }).on("mouseleave", function() {
-        updateHoverCard(null);
+        hideHoverCard();
       });
   }
 
@@ -702,60 +708,121 @@ function addPlusMinusControl(x: number, layerIdx: number) {
   );
 }
 
-function updateHoverCard(type: HoverType, nodeOrLink?: nn.Node | nn.Link,
-    coordinates?: [number, number]) {
+function showLinkHoverCard(link: nn.Link, coordinates?: [number, number]) {
+
+  console.log('showLinkHoverCard link', link)
+
   let hovercard = d3.select("#hovercard");
-  if (type == null) {
-    hovercard.style("display", "none");
-    d3.select("#svg").on("click", null);
-    return;
-  }
+  let hovercardPrevWeight = d3.select("#hovercard-prev-weight");
+  let hovercardPrevBias = d3.select("#hovercard-prev-bias");
   d3.select("#svg").on("click", () => {
     hovercard.select(".value").style("display", "none");
     let input = hovercard.select("input");
     input.style("display", null);
     input.on("input", function() {
       if (this.value != null && this.value !== "") {
-        if (type === HoverType.WEIGHT) {
-          (nodeOrLink as nn.Link).weight = +this.value;
-        } else {
-          (nodeOrLink as nn.Node).bias = +this.value;
-        }
+        link.prevWeight = link.weight;
+        link.weight = +this.value;
         updateUI();
       }
     });
     input.on("keypress", () => {
       if ((d3.event as any).keyCode === 13) {
-        updateHoverCard(type, nodeOrLink, coordinates);
+        showLinkHoverCard(link, coordinates);
       }
     });
     (input.node() as HTMLInputElement).focus();
   });
-  let value = (type === HoverType.WEIGHT) ?
-    (nodeOrLink as nn.Link).weight :
-    (nodeOrLink as nn.Node).bias;
-  let name = (type === HoverType.WEIGHT) ? "Weight" : "Bias";
+
   hovercard.style({
     "left": `${coordinates[0] + 20}px`,
     "top": `${coordinates[1]}px`,
     "display": "block"
   });
-  hovercard.select(".type").text(name);
+  hovercard.select(".type").text("Weight");
   hovercard.select(".value")
     .style("display", null)
-    .text(value.toPrecision(2));
+    .text(link.weight.toPrecision(4));
+
+  hovercardPrevWeight.style({
+    "display": "block"
+  });
+  hovercardPrevBias.style({
+    "display": "none"
+  });
+  hovercard.select(".prevType").text("Prev weight");
+  hovercard.select(".prevValue")
+      .style("display", null)
+      .text(link.prevWeight.toPrecision(4));
+
   hovercard.select("input")
-    .property("value", value.toPrecision(2))
+    .property("value", link.weight.toPrecision(4))
+    .style("display", "none");
+}
+
+function hideHoverCard() {
+  let hovercard = d3.select("#hovercard");
+  hovercard.style("display", "none");
+  d3.select("#svg").on("click", null);
+}
+
+function showNodeHoverCard(node: nn.Node, coordinates?: [number, number]) {
+  console.log('showNodeHoverCard node', node)
+
+  let hovercard = d3.select("#hovercard");
+  let hovercardPrevWeight = d3.select("#hovercard-prev-weight");
+  let hovercardPrevBias = d3.select("#hovercard-prev-bias");
+  d3.select("#svg").on("click", () => {
+    hovercard.select(".value").style("display", "none");
+    let input = hovercard.select("input");
+    input.style("display", null);
+    input.on("input", function() {
+      if (this.value != null && this.value !== "") {
+        node.prevBias = node.bias
+        node.bias = +this.value;
+        updateUI();
+      }
+    });
+    input.on("keypress", () => {
+      if ((d3.event as any).keyCode === 13) {
+        showNodeHoverCard(node, coordinates);
+      }
+    });
+    (input.node() as HTMLInputElement).focus();
+  });
+
+  hovercard.style({
+    "left": `${coordinates[0] + 20}px`,
+    "top": `${coordinates[1]}px`,
+    "display": "block"
+  });
+  hovercard.select(".type").text("Bias");
+  hovercard.select(".value")
+    .style("display", null)
+    .text(node.bias.toPrecision(4));
+  hovercardPrevWeight.style({
+    "display": "none"
+  });
+  hovercardPrevBias.style({
+    "display": "block"
+  });
+  hovercard.select(".prevBiasType").text("Prev bias");
+  hovercard.select(".prevBiasValue")
+      .style("display", null)
+      .text(node.prevBias.toPrecision(4));
+
+  hovercard.select("input")
+    .property("value", node.bias.toPrecision(4))
     .style("display", "none");
 }
 
 function drawLink(
-    input: nn.Link, node2coord: {[id: string]: {cx: number, cy: number}},
+    link: nn.Link, node2coord: {[id: string]: {cx: number, cy: number}},
     network: nn.Node[][], container,
     isFirst: boolean, index: number, length: number) {
   let line = container.insert("path", ":first-child");
-  let source = node2coord[input.source.id];
-  let dest = node2coord[input.dest.id];
+  let source = node2coord[link.source.id];
+  let dest = node2coord[link.dest.id];
   let datum = {
     source: {
       y: source.cx + RECT_SIZE / 2 + 2,
@@ -770,7 +837,7 @@ function drawLink(
   line.attr({
     "marker-start": "url(#markerArrow)",
     class: "link",
-    id: "link" + input.source.id + "-" + input.dest.id,
+    id: "link" + link.source.id + "-" + link.dest.id,
     d: diagonal(datum, 0)
   });
 
@@ -780,9 +847,9 @@ function drawLink(
     .attr("d", diagonal(datum, 0))
     .attr("class", "link-hover")
     .on("mouseenter", function() {
-      updateHoverCard(HoverType.WEIGHT, input, d3.mouse(this));
+      showLinkHoverCard(link, d3.mouse(this));
     }).on("mouseleave", function() {
-      updateHoverCard(null);
+      hideHoverCard();
     });
   return line;
 }
@@ -883,6 +950,7 @@ function updateUI(firstStep = false) {
   d3.select("#loss-train").text(humanReadable(lossTrain));
   d3.select("#loss-test").text(humanReadable(lossTest));
   d3.select("#iter-number").text(addCommas(zeroPad(iter)));
+  d3.select("#data-iter-number").text(`${dataIter} / ${testData.length}`);
   lineChart.addDataPoint([lossTrain, lossTest]);
 }
 
@@ -909,6 +977,10 @@ function constructInput(x: number, y: number): number[] {
 function oneStep(): void {
   iter++;
   trainData.forEach((point, i) => {
+    if (i < dataIter) {
+      return
+    }
+
     let input = constructInput(point.x, point.y);
     nn.forwardProp(network, input);
     nn.backProp(network, point.label, nn.Errors.SQUARE);
@@ -916,6 +988,46 @@ function oneStep(): void {
       nn.updateWeights(network, state.learningRate, state.regularizationRate);
     }
   });
+
+  dataIter = 0;
+
+  // Compute the loss.
+  lossTrain = getLoss(network, trainData);
+  lossTest = getLoss(network, testData);
+  updateUI();
+}
+
+// batchSize = 30
+// dataIter = 0
+// nextThreshold = 30
+// i = 0
+// 0 < 0 - 1
+
+function batchStep(): void {
+  let nextThreshold = dataIter + state.batchSize
+  trainData.forEach((point, i) => {
+    if (i < dataIter - 1) {
+      return
+    }
+
+    if (i > nextThreshold) {
+      return
+    }
+
+    dataIter = i;
+    let input = constructInput(point.x, point.y);
+    nn.forwardProp(network, input);
+    nn.backProp(network, point.label, nn.Errors.SQUARE);
+    if ((i + 1) % state.batchSize === 0) {
+      nn.updateWeights(network, state.learningRate, state.regularizationRate);
+    }
+  });
+
+  if (dataIter >= trainData.length) {
+    dataIter = 0;
+    iter++
+  }
+
   // Compute the loss.
   lossTrain = getLoss(network, trainData);
   lossTest = getLoss(network, testData);
@@ -951,6 +1063,7 @@ function reset(onStartup=false) {
 
   // Make a simple network.
   iter = 0;
+  dataIter = 0;
   let numInputs = constructInput(0 , 0).length;
   let shape = [numInputs].concat(state.networkShape).concat([1]);
   let outputActivation = (state.problem === Problem.REGRESSION) ?
@@ -1099,17 +1212,9 @@ function userHasInteracted() {
   if (state.tutorial != null && state.tutorial !== '') {
     page = `/v/tutorials/${state.tutorial}`;
   }
-  ga('set', 'page', page);
-  ga('send', 'pageview', {'sessionControl': 'start'});
 }
 
 function simulationStarted() {
-  ga('send', {
-    hitType: 'event',
-    eventCategory: 'Starting Simulation',
-    eventAction: parametersChanged ? 'changed' : 'unchanged',
-    eventLabel: state.tutorial == null ? '' : state.tutorial
-  });
   parametersChanged = false;
 }
 

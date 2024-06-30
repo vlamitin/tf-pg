@@ -64,13 +64,20 @@ limitations under the License.
           <i class="material-icons">play_arrow</i>
           <i class="material-icons">pause</i>
         </button>
-        <button class="mdl-button mdl-js-button mdl-button--icon ui-stepButton" id="next-step-button" title="Step">
+        <button class="mdl-button mdl-js-button mdl-button--icon ui-stepButton" id="next-step-button" title="Epoch step">
+          <i class="material-icons">skip_next</i>
+        </button>
+        <button class="mdl-button mdl-js-button mdl-button--icon ui-stepButton" id="next-batch-button" title="Batch step">
           <i class="material-icons">skip_next</i>
         </button>
       </div>
       <div class="control">
         <span class="label">Epoch</span>
         <span class="value" id="iter-number"></span>
+      </div>
+      <div class="control">
+        <span class="label">Data iter</span>
+        <span class="value" id="data-iter-number"></span>
       </div>
       <div class="control ui-learningRate">
         <label for="learningRate">Learning rate</label>
@@ -211,7 +218,11 @@ limitations under the License.
         <!-- Hover card -->
         <div id="hovercard">
           <div style="font-size:10px">Click anywhere to edit.</div>
-          <div><span class="type">Weight/Bias</span> is <span class="value">0.2</span><span><input type="number"/></span>.</div>
+          <div>
+            <p><span class="type">Weight/Bias</span> is <span class="value">0.2</span><span><input type="number"/></span>.</p>
+            <p id="hovercard-prev-weight"><span class="prevType">Prev weight</span> is <span class="prevValue">0.2</span>.</p>
+            <p id="hovercard-prev-bias"><span class="prevBiasType">Prev bias</span> is <span class="prevBiasValue">0.2</span>.</p>
+          </div>
         </div>
         <div class="callout thumbnail">
           <svg viewBox="0 0 30 30">
@@ -395,7 +406,5 @@ limitations under the License.
     </div>
   </footer>
   <script src="bundle.js"></script>
-  <!-- Google analytics -->
-  <script src="analytics.js"></script>
 </body>
 </html>

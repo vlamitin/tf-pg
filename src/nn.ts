@@ -23,6 +23,7 @@ export class Node {
   /** List of input links. */
   inputLinks: Link[] = [];
   bias = 0.1;
+  prevBias = 0.1;
   /** List of output links. */
   outputs: Link[] = [];
   totalInput: number;
@@ -53,6 +54,7 @@ export class Node {
     this.activation = activation;
     if (initZero) {
       this.bias = 0;
+      this.prevBias = 0;
     }
   }
 
@@ -158,6 +160,7 @@ export class Link {
   id: string;
   source: Node;
   dest: Node;
+  prevWeight = 0;
   weight = Math.random() - 0.5;
   isDead = false;
   /** Error derivative with respect to this weight. */
@@ -333,13 +336,14 @@ export function backProp(network: Node[][], target: number,
  * derivatives.
  */
 export function updateWeights(network: Node[][], learningRate: number,
-    regularizationRate: number) {
+    regularizationRate: number): Node[][] {
   for (let layerIdx = 1; layerIdx < network.length; layerIdx++) {
     let currentLayer = network[layerIdx];
     for (let i = 0; i < currentLayer.length; i++) {
       let node = currentLayer[i];
       // Update the node's bias.
       if (node.numAccumulatedDers > 0) {
+        node.prevBias = node.bias
         node.bias -= learningRate * node.accInputDer / node.numAccumulatedDers;
         node.accInputDer = 0;
         node.numAccumulatedDers = 0;
@@ -350,10 +354,12 @@ export function updateWeights(network: Node[][], learningRate: number,
         if (link.isDead) {
           continue;
         }
+
         let regulDer = link.regularization ?
             link.regularization.der(link.weight) : 0;
         if (link.numAccumulatedDers > 0) {
           // Update the weight based on dE/dw.
+          let prevWeight = link.weight
           link.weight = link.weight -
               (learningRate / link.numAccumulatedDers) * link.accErrorDer;
           // Further update the weight based on regularization.
@@ -367,12 +373,15 @@ export function updateWeights(network: Node[][], learningRate: number,
           } else {
             link.weight = newLinkWeight;
           }
+          link.prevWeight = prevWeight
           link.accErrorDer = 0;
           link.numAccumulatedDers = 0;
         }
       }
     }
   }
+
+  return network
 }
 
 /** Iterates over every node in the network/ */
